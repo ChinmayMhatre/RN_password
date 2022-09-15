@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
     StyleSheet,
     Text,
@@ -11,27 +11,24 @@ import {
 import { ListItem } from "react-native-elements";
 import { firestore } from "../firebase";
 
-class Home extends React.Component {
-    constructor() {
-        super();
-        this.docs = firestore.collection("passwords");
-        this.state = {
-            isLoading: true,
-            creds: [],
-            password: "",
-            title: "",
+const Home = () => {
+    let docs;
+    let unsubscribe;
+    const [isLoading, setIsLoading] = useState(false);
+    const [creds, setCreds] = useState([]);
+    const [password, setPassword] = useState("");
+    const [title, setTitle] = useState("");
+
+    useEffect(() => {
+        docs = firestore.collection("passwords");
+        unsubscribe = docs.onSnapshot(getCredsData);
+
+        return () => {
+            unsubscribe();
         };
-    }
+    }, []);
 
-    componentDidMount() {
-        this.unsubscribe = this.docs.onSnapshot(this.getCredsData);
-    }
-
-    componentWillUnmount() {
-        this.unsubscribe();
-    }
-
-    getCredsData = (querySnapshot) => {
+    const getCredsData = (querySnapshot) => {
         const creds = [];
         querySnapshot.forEach((res) => {
             const data = res.data().password;
@@ -40,14 +37,13 @@ class Home extends React.Component {
                 data,
             });
         });
-        this.setState({
-            creds,
-            isLoading: false,
-        });
+        setCreds(creds);
+        setIsLoading(false);
     };
 
-    deleteCreds = (id) => {
-        this.docs
+    const deleteCreds = (id) => {
+        firestore
+            .collection("passwords")
             .doc(id)
             .delete()
             .then(() => {
@@ -58,88 +54,81 @@ class Home extends React.Component {
             });
     };
 
-
-
-    render() {
-        if (this.state.isLoading) {
-            return (
-                <View style={styles.loader}>
-                    <ActivityIndicator size="large" color="red" />
-                </View>
-            );
-        }
+    if (isLoading) {
         return (
-            <View style={styles.container}>
-                <ScrollView style={styles.wrapper}>
-                    {this.state.creds ? (
-                        this.state.creds.map((res, i) => {
-                            return (
-                                <ListItem key={i} bottomDivider>
-                                    <ListItem.Content>
-                                        <ListItem.Title style = {styles.title}>
-                                            {res.key}
-                                        </ListItem.Title>
-                                        <ListItem.Subtitle>
-                                            {res.data}
-                                        </ListItem.Subtitle>
-                                    </ListItem.Content>
-                                    <TouchableOpacity
-                                    style = {styles.deleteButton}
-                                    onPress={() => this.deleteCreds(res.key)}>
-                                            <Text style={styles.deleteText}>Delete</Text>
-                                    </TouchableOpacity>
-                                </ListItem>
-                            );
-                        })
-                    ) : (
-                        <View />
-                    )}
-                </ScrollView>
-
-                <View style={styles.FormView}>
-                    <View style={styles.InputView}>
-                    <TextInput
-                            style={styles.input}
-                            placeholder="Enter title"
-                            onChangeText={(text) =>
-                                this.setState({ title: text })
-                            }
-                        />
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter Password"
-                            secureTextEntry={true}
-                            onChangeText={(text) =>
-                                this.setState({ password: text })
-                            }
-                        />
-                    </View>
-                    <View style={styles.ButtonView}>
-                        <TouchableOpacity
-                            style={styles.button}
-                            onPress={() => {
-                                this.docs.doc(this.state.title).set({
-                                    password: this.state.password,
-                                });
-                                this.setState({
-                                    password: "",
-                                    title: "",
-                                });
-                            }}
-                        >
-                            <Text style={styles.buttonText}>Add</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
+            <View style={styles.loader}>
+                <ActivityIndicator size="large" color="red" />
             </View>
         );
     }
-}
+    return (
+        <View style={styles.container}>
+            <ScrollView style={styles.wrapper}>
+                {creds ? (
+                    creds.map((res, i) => {
+                        return (
+                            <ListItem key={i} bottomDivider>
+                                <ListItem.Content>
+                                    <ListItem.Title style={styles.title}>
+                                        {res.key}
+                                    </ListItem.Title>
+                                    <ListItem.Subtitle>
+                                        {res.data}
+                                    </ListItem.Subtitle>
+                                </ListItem.Content>
+                                <TouchableOpacity
+                                    style={styles.deleteButton}
+                                    onPress={() => deleteCreds(res.key)}
+                                >
+                                    <Text style={styles.deleteText}>
+                                        Delete
+                                    </Text>
+                                </TouchableOpacity>
+                            </ListItem>
+                        );
+                    })
+                ) : (
+                    <View />
+                )}
+            </ScrollView>
+
+            <View style={styles.FormView}>
+                <View style={styles.InputView}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter title"
+                        onChangeText={(text) => setTitle(text)}
+                    />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter Password"
+                        secureTextEntry={true}
+                        onChangeText={(text) => setPassword(text)}
+                    />
+                </View>
+                <View style={styles.ButtonView}>
+                    <TouchableOpacity
+                        style={styles.button}
+                        onPress={() => {
+                            firestore.collection("passwords").doc(title).set({
+                                password: password,
+                            });
+                            setTitle("");
+                            setPassword("");
+                        }}
+                    >
+                        <Text style={styles.buttonText}>Add</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+    );
+};
 
 export default Home;
 
 const styles = StyleSheet.create({
-    title:{
+    title: {
         fontSize: 20,
         fontWeight: "bold",
     },
@@ -149,7 +138,7 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     FormView: {
-        flex: 1/3,
+        flex: 1 / 3,
         justifyContent: "center",
         alignItems: "center",
         marginTop: 20,
@@ -188,7 +177,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     wrapper: {
-        flex: 1/7,
+        flex: 1 / 7,
         paddingBottom: 22,
         height: "80%",
         width: "80%",
@@ -218,6 +207,4 @@ const styles = StyleSheet.create({
         backgroundColor: "green",
         textAlign: "center",
     },
-
-
 });
