@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import {auth, firestore} from '../firebase';
 import {
     StyleSheet,
     Text,
@@ -8,50 +9,53 @@ import {
     ScrollView,
     TextInput,
 } from "react-native";
+import {collection,deleteDoc,doc,onSnapshot,query,addDoc} from "firebase/firestore";
 import { ListItem } from "react-native-elements";
-import { firestore } from "../firebase";
 
 const Home = () => {
-    let docs;
-    let unsubscribe;
     const [isLoading, setIsLoading] = useState(false);
     const [creds, setCreds] = useState([]);
     const [password, setPassword] = useState("");
     const [title, setTitle] = useState("");
 
     useEffect(() => {
-        docs = firestore.collection("passwords");
-        unsubscribe = docs.onSnapshot(getCredsData);
-
-        return () => {
-            unsubscribe();
-        };
+        getCredsData()
     }, []);
 
     const getCredsData = (querySnapshot) => {
+        setIsLoading(true);
+        const collectionRef = collection(firestore, "passwords");
+        const q = query(collectionRef);
         const creds = [];
-        querySnapshot.forEach((res) => {
-            const data = res.data().password;
-            creds.push({
-                key: res.id,
-                data,
+
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                creds.push({id:doc.id,...data});
             });
+            setCreds(creds);
+            setIsLoading(false);
         });
-        setCreds(creds);
-        setIsLoading(false);
+
+        return unsubscribe;
     };
 
-    const deleteCreds = (id) => {
-        firestore
-            .collection("passwords")
-            .doc(id)
-            .delete()
+    const deleteCreds = async (id) => {
+        try {
+            console.log(id);
+            const docRef = doc(firestore, "passwords", id);
+
+            deleteDoc(docRef)
             .then(() => {
-                console.log("Document successfully deleted!");
+                getCredsData();
             })
-            .catch((error) => {
-                console.error("Error removing document: ", error);
-            });
+            .catch(error => {
+                console.log(error);
+            })
+            
+        } catch (error) {
+            console.log(error);
+        }
     };
 
     if (isLoading) {
@@ -78,7 +82,7 @@ const Home = () => {
                                 </ListItem.Content>
                                 <TouchableOpacity
                                     style={styles.deleteButton}
-                                    onPress={() => deleteCreds(res.key)}
+                                    onPress={() => deleteCreds(res.id)}
                                 >
                                     <Text style={styles.deleteText}>
                                         Delete
@@ -109,9 +113,10 @@ const Home = () => {
                 <View style={styles.ButtonView}>
                     <TouchableOpacity
                         style={styles.button}
-                        onPress={() => {
-                            firestore.collection("passwords").doc(title).set({
-                                password: password,
+                        onPress={async () => {
+                            const doc= await addDoc(collection(firestore, "passwords"), {
+                                key: title,
+                                data: password,
                             });
                             setTitle("");
                             setPassword("");
